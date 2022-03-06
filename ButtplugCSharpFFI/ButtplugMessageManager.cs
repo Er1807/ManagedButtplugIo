@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +28,6 @@ namespace Buttplug
         /// </summary>
         private int _counter;
         private readonly WebSocket _webSocket;
-        private Thread _pingThread;
         private uint _pingTimeout;
 
         /// <summary>
@@ -42,17 +42,19 @@ namespace Buttplug
             _webSocket = new WebSocket(connectorOptions.NetworkAddress.AbsoluteUri);
             _client = client;
             _webSocket.OnMessage += RecieveMessage;
+            _webSocket.OnClose += (a, b) => _client.OnServerDisconnect(this, b);
+            _webSocket.OnError += (a, b) => _client.OnServerDisconnect(this, b);
         }
 
         public async Task Connect()
         {
             _webSocket.Connect();
-            var result = await SendClientMessage(new RequestServerInfoCmd() { ClientName = _client.Name, MessageVersion = 2 });
+            var result = await SendClientMessage(new RequestServerInfo() { ClientName = _client.Name, MessageVersion = 2 });
 
-            if(result is ServerInfoCmd serverInfo)
+            if (result is ServerInfo serverInfo)
             {
                 _pingTimeout = serverInfo.MaxPingTime;
-                (_pingThread = new Thread(Pings)).Start();
+                new Thread(Pings).Start();
                 //Start pings
             }
 
@@ -60,10 +62,10 @@ namespace Buttplug
 
         private void Pings()
         {
-            while(_webSocket.ReadyState == WebSocketState.Open)
+            while (_webSocket.ReadyState == WebSocketState.Open)
             {
                 Thread.Sleep((int)_pingTimeout / 2);
-                SendClientMessage(new PingCmd());
+                SendClientMessage(new Ping());
             }
         }
 
@@ -84,8 +86,7 @@ namespace Buttplug
             {
                 foreach (var item in typeof(Message).GetProperties())
                 {
-                    MessageBase messageBase = item.GetValue(message) as MessageBase;
-                    if (messageBase != null)
+                    if (item.GetValue(message) is MessageBase messageBase)
                         CheckMessage(messageBase);
                 }
             }
@@ -119,14 +120,36 @@ namespace Buttplug
         public void CheckMessage(MessageBase aMsg)
         {
             // We'll never match a system message, those are server -> client only.
+
+            if (aMsg is Error error)
+            {
+                if (error.ErrorCode == Error.ErrorCodeEnum.ERROR_PING)
+                {
+                    _client.OnPingTimeout(this, null);
+                }
+                _client.OnErrorReceived(this, new ButtplugExceptionEventArgs(ButtplugException.FromError(error)));
+            }
+
             if (aMsg.Id == 0)
             {
-                if (aMsg is DeviceAddedCmd)
-                    _client.OnDeviceAdded(_client, new DeviceAddedEventArgs(new ButtplugClientDevice()));
-                if (aMsg is DeviceRemovedCmd)
-                    _client.OnDeviceAdded(_client, new DeviceRemovedEventArgs(new ButtplugClientDevice()));
+                if (aMsg is DeviceAdded deviceAdded)
+                {
+                    if (_client.Devices.Any(x => x.Index == deviceAdded.DeviceIndex))
+                        _client.OnErrorReceived(this, new ButtplugExceptionEventArgs(new ButtplugDeviceException("A duplicate device index was received. This is most likely a bug, please file at https://github.com/buttplugio/buttplug-rs-ffi")));
+                    else
+                        _client.OnDeviceAdded(_client, new DeviceAddedEventArgs(new ButtplugClientDevice(this, deviceAdded.DeviceIndex, deviceAdded.DeviceName, deviceAdded.DeviceMessages)));
 
-                if (aMsg is ScanningFinishedCmd) 
+                }
+                if (aMsg is DeviceRemoved deviceRemoved)
+                {
+                    var device = _client.Devices.SingleOrDefault(x => x.Index == deviceRemoved.DeviceIndex);
+                    if (device != null)
+                        _client.OnDeviceRemoved(_client, new DeviceRemovedEventArgs(device));
+                    else
+                        _client.OnErrorReceived(this, new ButtplugExceptionEventArgs(new ButtplugDeviceException($"Cannot remove device index {deviceRemoved.DeviceIndex}, device not found.")));
+                }
+
+                if (aMsg is ScanningFinished)
                     _client.OnScanningFinished(_client, new EventArgs()); ;
             }
 
@@ -137,9 +160,9 @@ namespace Buttplug
                 throw new ButtplugMessageException("Message with non-matching ID received.");
             }
 
-            if (aMsg is ErrorCmd error)
+            if (aMsg is Error error2)
             {
-                queued.SetException(ButtplugException.FromError(error));
+                queued.SetException(ButtplugException.FromError(error2));
             }
             else
             {

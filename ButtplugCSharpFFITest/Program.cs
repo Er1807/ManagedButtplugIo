@@ -17,10 +17,6 @@ namespace ButtplugCSharpFFITest
             Console.ReadKey(true);
         }
 
-        private static void LogCallback(string aMsg)
-        {
-            Console.WriteLine(aMsg);
-        }
 
         private static async Task RunExample()
         {

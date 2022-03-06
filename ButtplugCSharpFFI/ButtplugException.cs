@@ -32,20 +32,20 @@ namespace Buttplug
         {
         }
 
-        public static ButtplugException FromError(ErrorCmd aMsg)
+        public static ButtplugException FromError(Error aMsg)
         {
             var err_str = aMsg.ErrorMessage;
             switch (aMsg.ErrorCode)
             {
-                case ErrorCmd.ErrorCodeEnum.ERROR_INIT:
+                case Error.ErrorCodeEnum.ERROR_INIT:
                     return new ButtplugConnectorException(err_str);
-                case ErrorCmd.ErrorCodeEnum.ERROR_PING:
+                case Error.ErrorCodeEnum.ERROR_PING:
                     return new ButtplugPingException(err_str);
-                case ErrorCmd.ErrorCodeEnum.ERROR_MSG:
+                case Error.ErrorCodeEnum.ERROR_MSG:
                     return new ButtplugMessageException(err_str);
-                case ErrorCmd.ErrorCodeEnum.ERROR_UNKNOWN:
+                case Error.ErrorCodeEnum.ERROR_UNKNOWN:
                     return new ButtplugUnknownException(err_str);
-                case ErrorCmd.ErrorCodeEnum.ERROR_DEVICE:
+                case Error.ErrorCodeEnum.ERROR_DEVICE:
                     return new ButtplugDeviceException(err_str);
             }
 

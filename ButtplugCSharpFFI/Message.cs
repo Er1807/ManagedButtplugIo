@@ -15,24 +15,33 @@ namespace Buttplug
             // Only handle Client messages
             Message message = new Message();
 
-            if (messageBase is PingCmd PingCmd)
+            if (messageBase is Ping PingCmd)
                 message.Ping = PingCmd;
 
 
-            if (messageBase is RequestServerInfoCmd RequestServerInfoCmd)
+            if (messageBase is RequestServerInfo RequestServerInfoCmd)
                 message.RequestServerInfo = RequestServerInfoCmd;
 
 
-            if (messageBase is StartScanningCmd StartScanningCmd)
+            if (messageBase is StartScanning StartScanningCmd)
                 message.StartScanning = StartScanningCmd;
-            if (messageBase is StopScanningCmd StopScanningCmd)
+            if (messageBase is StopScanning StopScanningCmd)
                 message.StopScanning = StopScanningCmd;
-            if (messageBase is RequestDeviceListCmd RequestDeviceListCmd)
+            if (messageBase is RequestDeviceList RequestDeviceListCmd)
                 message.RequestDeviceList = RequestDeviceListCmd;
+
+            if (messageBase is RawWriteCmd RawWriteCmd)
+                message.RawWriteCmd = RawWriteCmd;
+            if (messageBase is RawReadCmd RawReadCmd)
+                message.RawReadCmd = RawReadCmd;
+            if (messageBase is RawSubscribeCmd RawSubscribeCmd)
+                message.RawSubscribeCmd = RawSubscribeCmd;
+            if (messageBase is RawUnsubscribeCmd RawUnsubscribeCmd)
+                message.RawUnsubscribeCmd = RawUnsubscribeCmd;
 
             if (messageBase is StopDeviceCmd StopDeviceCmd)
                 message.StopDeviceCmd = StopDeviceCmd;
-            if (messageBase is StopAllDevicesCmd StopAllDevicesCmd)
+            if (messageBase is StopAllDevices StopAllDevicesCmd)
                 message.StopAllDevices = StopAllDevicesCmd;
             if (messageBase is VibrateCmd VibrateCmd)
                 message.VibrateCmd = VibrateCmd;
@@ -50,38 +59,43 @@ namespace Buttplug
 
         }
         //Status
-        public OkCmd Ok { get; set; }
-        public ErrorCmd Error { get; set; }
-        public PingCmd Ping { get; set; }
+        public Ok Ok { get; set; }
+        public Error Error { get; set; }
+        public Ping Ping { get; set; }
 
         //Handshake
-        public RequestServerInfoCmd RequestServerInfo { get; set; }
-        public ServerInfoCmd ServerInfo { get; set; }
+        public RequestServerInfo RequestServerInfo { get; set; }
+        public ServerInfo ServerInfo { get; set; }
 
         //Enumeration
-        public StartScanningCmd StartScanning { get; set; }
-        public StopScanningCmd StopScanning { get; set; }
-        public ScanningFinishedCmd ScanningFinished { get; set; }
-        public RequestDeviceListCmd RequestDeviceList { get; set; }
-        public DeviceListCmd DeviceList { get; set; }
-        public DeviceAddedCmd DeviceAdded { get; set; }
-        public DeviceRemovedCmd DeviceRemoved { get; set; }
+        public StartScanning StartScanning { get; set; }
+        public StopScanning StopScanning { get; set; }
+        public ScanningFinished ScanningFinished { get; set; }
+        public RequestDeviceList RequestDeviceList { get; set; }
+        public DeviceList DeviceList { get; set; }
+        public DeviceAdded DeviceAdded { get; set; }
+        public DeviceRemoved DeviceRemoved { get; set; }
 
         //Raw Messages
+        public RawWriteCmd RawWriteCmd { get; set; }
+        public RawReadCmd RawReadCmd { get; set; }
+        public RawReading RawReading { get; set; }
+        public RawSubscribeCmd RawSubscribeCmd { get; set; }
+        public RawUnsubscribeCmd RawUnsubscribeCmd { get; set; }
         //not implemented
 
         // Generic Device Messages
         public StopDeviceCmd StopDeviceCmd { get; set; }
-        public StopAllDevicesCmd StopAllDevices { get; set; }
+        public StopAllDevices StopAllDevices { get; set; }
         public VibrateCmd VibrateCmd { get; set; }
         public LinearCmd LinearCmd { get; set; }
         public RotateCmd RotateCmd { get; set; }
 
         //Generinc Sensor Messsages
         public BatteryLevelCmd BatteryLevelCmd { get; set; }
-        public BatteryLevelReadingCmd BatteryLevelReading { get; set; }
+        public BatteryLevelReading BatteryLevelReading { get; set; }
         public RSSILevelCmd RSSILevelCmd { get; set; }
-        public RSSILevelReadingCmd RSSILevelReading { get; set; }
+        public RSSILevelReading RSSILevelReading { get; set; }
 
     }
 
@@ -92,13 +106,12 @@ namespace Buttplug
 
     #region Status Messages
 
-    public class OkCmd : MessageBase
+    public class Ok : MessageBase
     {
     }
 
-    public class ErrorCmd : MessageBase
+    public class Error : MessageBase
     {
-        public uint Id { get; set; }
         public string ErrorMessage { get; set; }
         public ErrorCodeEnum ErrorCode { get; set; }
 
@@ -109,21 +122,21 @@ namespace Buttplug
         }
     }
 
-    public class PingCmd : MessageBase
+    public class Ping : MessageBase
     {
     }
 
     #endregion
 
     #region Handshake Messages
-    public class ServerInfoCmd : MessageBase
+    public class ServerInfo : MessageBase
     {
         public string ServerName { get; set; }
         public uint MessageVersion { get; set; }
         public uint MaxPingTime { get; set; }
     }
 
-    public class RequestServerInfoCmd : MessageBase
+    public class RequestServerInfo : MessageBase
     {
         public string ClientName { get; set; }
         public uint MessageVersion { get; set; }
@@ -132,31 +145,31 @@ namespace Buttplug
 
     #region Enumeration Messages
 
-    public class StartScanningCmd : MessageBase
+    public class StartScanning : MessageBase
     {
     }
 
-    public class StopScanningCmd : MessageBase
+    public class StopScanning : MessageBase
     {
     }
-    public class ScanningFinishedCmd : MessageBase
-    {
-    }
-
-    public class RequestDeviceListCmd : MessageBase
+    public class ScanningFinished : MessageBase
     {
     }
 
-    public class DeviceListCmd : MessageBase
+    public class RequestDeviceList : MessageBase
     {
-        public List<DeviceAddedCmd> Devices { get; set; }
     }
 
-    public class DeviceAddedCmd : MessageBase
+    public class DeviceList : MessageBase
+    {
+        public List<DeviceAdded> Devices { get; set; }
+    }
+
+    public class DeviceAdded : MessageBase
     {
         public uint DeviceIndex { get; set; }
         public string DeviceName { get; set; }
-        public Dictionary<string, DeviceMessages> DeviceMessagesDetails { get; set; }
+        public Dictionary<string, DeviceMessagesDetails> DeviceMessages { get; set; }
 
         
     }
@@ -178,7 +191,7 @@ namespace Buttplug
         public List<uint> MaxDuration { get; set; }
     }
 
-    public class DeviceRemovedCmd : MessageBase
+    public class DeviceRemoved : MessageBase
     {
         public uint DeviceIndex { get; set; }
     }
@@ -186,8 +199,39 @@ namespace Buttplug
     #endregion
 
     #region Raw Messages
-    // Not implemented rn
+    public class RawWriteCmd : MessageBase
+    {
+        public uint DeviceIndex { get; set; }
+        public string Endpoint { get; set; }
+        public List<int> Data { get; set; }
+        public bool WriteWithResponse { get; set; }
+    }
+    public class RawReadCmd : MessageBase
+    {
+        public uint DeviceIndex { get; set; }
+        public string Endpoint { get; set; }
+        public uint ExpectedLength { get; set; }
+        public bool WaitForData { get; set; }
+    }
 
+    public class RawReading : MessageBase
+    {
+        public uint DeviceIndex { get; set; }
+        public string Endpoint { get; set; }
+        public List<int> Data { get; set; }
+    }
+
+    public class RawSubscribeCmd : MessageBase
+    {
+        public uint DeviceIndex { get; set; }
+        public string Endpoint { get; set; }
+    }
+
+    public class RawUnsubscribeCmd : MessageBase
+    {
+        public uint DeviceIndex { get; set; }
+        public string Endpoint { get; set; }
+    }
 
     #endregion
 
@@ -198,7 +242,7 @@ namespace Buttplug
         public uint DeviceIndex { get; set; }
     }
 
-    public class StopAllDevicesCmd : MessageBase
+    public class StopAllDevices : MessageBase
     {
     }
     public class VibrateCmd : MessageBase
@@ -250,7 +294,7 @@ namespace Buttplug
         public uint DeviceIndex { get; set; }
     }
 
-    public class BatteryLevelReadingCmd : MessageBase
+    public class BatteryLevelReading : MessageBase
     {
         public uint DeviceIndex { get; set; }
         public double BatteryLevel { get; set; }
@@ -261,7 +305,7 @@ namespace Buttplug
         public uint DeviceIndex { get; set; }
     }
 
-    public class RSSILevelReadingCmd : MessageBase
+    public class RSSILevelReading : MessageBase
     {
         public uint DeviceIndex { get; set; }
         public int RSSILevel { get; set; }

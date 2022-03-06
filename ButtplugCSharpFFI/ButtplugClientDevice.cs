@@ -119,7 +119,7 @@ namespace Buttplug
             rotateMessage.Rotations = new List<Rotations>();
             foreach (var command in aCmds)
             {
-                rotateMessage.Rotations.Add(new Rotations() { Index = command.Key, Speed = command.Value.Item1, Clockwise= command.Value.Item2 });
+                rotateMessage.Rotations.Add(new Rotations() { Index = command.Key, Speed = command.Value.Item1, Clockwise = command.Value.Item2 });
             }
             return _manager.SendClientMessage(rotateMessage);
         }
@@ -163,7 +163,7 @@ namespace Buttplug
         public async Task<double> SendBatteryLevelCmd()
         {
             var result = await _manager.SendClientMessage(new BatteryLevelCmd() { DeviceIndex = Index });
-            if (result is BatteryLevelReadingCmd reading)
+            if (result is BatteryLevelReading reading)
                 return reading.BatteryLevel;
 
             throw new ButtplugDeviceException($"Expected message type of BatteryLevelReading not received, got {result} instead.");
@@ -172,7 +172,7 @@ namespace Buttplug
         public async Task<int> SendRSSIBatteryLevelCmd()
         {
             var result = await _manager.SendClientMessage(new RSSILevelCmd() { DeviceIndex = Index });
-            if (result is RSSILevelReadingCmd reading)
+            if (result is RSSILevelReading reading)
                 return reading.RSSILevel;
 
             throw new ButtplugDeviceException($"Expected message type of RssiLevelReading not received, got {result} instead.");
@@ -180,31 +180,38 @@ namespace Buttplug
 
         public async Task<byte[]> SendRawReadCmd(string aEndpoint, uint aExpectedLength, uint aTimeout)
         {
-            var reading = await ButtplugFFI.SendRawReadCmd(_sorter, _handle, Index, aEndpoint, aExpectedLength, aTimeout, _sorterCallback, _sorterCallbackCtx)
-                                           .ConfigureAwait(false);
-
-            if (reading.Message.MsgCase == ButtplugFFIServerMessage.Types.FFIMessage.MsgOneofCase.DeviceEvent
-             && reading.Message.DeviceEvent.MsgCase == DeviceEvent.MsgOneofCase.RawReading)
+            var task = _manager.SendClientMessage(new RawReadCmd() { DeviceIndex = Index, Endpoint = aEndpoint, ExpectedLength = aExpectedLength });
+            if (await Task.WhenAny(task, Task.Delay((int)aTimeout)) == task)
             {
-                return reading.Message.DeviceEvent.RawReading.Data.ToArray();
+                var result = await task;
+
+                if (result is RawReading reading)
+                {
+                    return reading.Data.Select(x => (byte)x).ToArray();
+                }
+
+                throw new ButtplugDeviceException($"Expected message type of RawReading not received, got {result} instead.");
+            }
+            else
+            {
+                throw new ButtplugDeviceException($"No Message returned");
             }
 
-            throw new ButtplugDeviceException($"Expected message type of RssiLevelReading not received, got {reading.Message.MsgCase} instead.");
         }
 
         public Task SendRawWriteCmd(string aEndpoint, byte[] aData, bool aWriteWithResponse)
         {
-            return ButtplugFFI.SendRawWriteCmd(_sorter, _handle, Index, aEndpoint, aData, aWriteWithResponse, _sorterCallback, _sorterCallbackCtx);
+            return _manager.SendClientMessage(new RawWriteCmd() { DeviceIndex = Index, Endpoint = aEndpoint, Data = aData.Select(x => (int)x).ToList(), WriteWithResponse = aWriteWithResponse });
         }
 
         public Task SendRawSubscribeCmd(string aEndpoint)
         {
-            return ButtplugFFI.SendRawSubscribeCmd(_sorter, _handle, Index, aEndpoint, _sorterCallback, _sorterCallbackCtx);
+            return _manager.SendClientMessage(new RawSubscribeCmd() { DeviceIndex = Index, Endpoint = aEndpoint });
         }
 
         public Task SendRawUnsubscribeCmd(string aEndpoint)
         {
-            return ButtplugFFI.SendRawUnsubscribeCmd(_sorter, _handle, Index, aEndpoint, _sorterCallback, _sorterCallbackCtx);
+            return _manager.SendClientMessage(new RawUnsubscribeCmd() { DeviceIndex = Index, Endpoint = aEndpoint });
         }
 
         public Task SendStopDeviceCmd()
