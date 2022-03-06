@@ -32,26 +32,24 @@ namespace Buttplug
         {
         }
 
-        public static ButtplugException FromError(ServerMessage.Types.Error aMsg)
+        public static ButtplugException FromError(ErrorCmd aMsg)
         {
-            var err_str = aMsg.Message;
-            switch (aMsg.ErrorType)
+            var err_str = aMsg.ErrorMessage;
+            switch (aMsg.ErrorCode)
             {
-                case ServerMessage.Types.ButtplugErrorType.ButtplugConnectorError:
+                case ErrorCmd.ErrorCodeEnum.ERROR_INIT:
                     return new ButtplugConnectorException(err_str);
-                case ServerMessage.Types.ButtplugErrorType.ButtplugPingError:
+                case ErrorCmd.ErrorCodeEnum.ERROR_PING:
                     return new ButtplugPingException(err_str);
-                case ServerMessage.Types.ButtplugErrorType.ButtplugMessageError:
+                case ErrorCmd.ErrorCodeEnum.ERROR_MSG:
                     return new ButtplugMessageException(err_str);
-                case ServerMessage.Types.ButtplugErrorType.ButtplugUnknownError:
+                case ErrorCmd.ErrorCodeEnum.ERROR_UNKNOWN:
                     return new ButtplugUnknownException(err_str);
-                case ServerMessage.Types.ButtplugErrorType.ButtplugHandshakeError:
-                    return new ButtplugHandshakeException(err_str);
-                case ServerMessage.Types.ButtplugErrorType.ButtplugDeviceError:
+                case ErrorCmd.ErrorCodeEnum.ERROR_DEVICE:
                     return new ButtplugDeviceException(err_str);
             }
 
-            return new ButtplugUnknownException($"Unknown error type: {aMsg.ErrorType} | Message: {aMsg.Message}");
+            return new ButtplugUnknownException($"Unknown error type: {aMsg.ErrorCode} | Message: {aMsg.ErrorMessage}");
         }
     }
 }

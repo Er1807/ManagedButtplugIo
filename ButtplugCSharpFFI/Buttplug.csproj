@@ -20,10 +20,11 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net47</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
     <PackageProjectUrl>https://buttplug.io</PackageProjectUrl>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Company>Nonpolynomial, LLC</Company>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -56,6 +57,11 @@
   
   <ItemGroup>
     <Content Remove="C:\Users\Eric\.nuget\packages\buttplugrustffi\2.0.5\build\..\runtimes\win-x64\native\buttplug_rs_ffi.dll" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="websocketsharp.core" Version="1.0.0" />
   </ItemGroup>
 
 </Project>

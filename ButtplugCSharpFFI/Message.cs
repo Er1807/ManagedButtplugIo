@@ -5,8 +5,50 @@ using System.Text;
 
 namespace Buttplug
 {
+
+
     public class Message
     {
+
+        public static Message From(MessageBase messageBase)
+        {
+            // Only handle Client messages
+            Message message = new Message();
+
+            if (messageBase is PingCmd PingCmd)
+                message.Ping = PingCmd;
+
+
+            if (messageBase is RequestServerInfoCmd RequestServerInfoCmd)
+                message.RequestServerInfo = RequestServerInfoCmd;
+
+
+            if (messageBase is StartScanningCmd StartScanningCmd)
+                message.StartScanning = StartScanningCmd;
+            if (messageBase is StopScanningCmd StopScanningCmd)
+                message.StopScanning = StopScanningCmd;
+            if (messageBase is RequestDeviceListCmd RequestDeviceListCmd)
+                message.RequestDeviceList = RequestDeviceListCmd;
+
+            if (messageBase is StopDeviceCmd StopDeviceCmd)
+                message.StopDeviceCmd = StopDeviceCmd;
+            if (messageBase is StopAllDevicesCmd StopAllDevicesCmd)
+                message.StopAllDevices = StopAllDevicesCmd;
+            if (messageBase is VibrateCmd VibrateCmd)
+                message.VibrateCmd = VibrateCmd;
+            if (messageBase is LinearCmd LinearCmd)
+                message.LinearCmd = LinearCmd;
+            if (messageBase is RotateCmd RotateCmd)
+                message.RotateCmd = RotateCmd;
+
+            if (messageBase is BatteryLevelCmd BatteryLevelCmd)
+                message.BatteryLevelCmd = BatteryLevelCmd;
+            if (messageBase is RSSILevelCmd RSSILevelCmd)
+                message.RSSILevelCmd = RSSILevelCmd;
+
+            return message;
+
+        }
         //Status
         public OkCmd Ok { get; set; }
         public ErrorCmd Error { get; set; }
@@ -43,18 +85,18 @@ namespace Buttplug
 
     }
 
-    public class IdBase
+    public class MessageBase
     {
-        uint Id { get; set; }
+        public uint Id { get; set; }
     }
 
     #region Status Messages
 
-    public class OkCmd : IdBase
+    public class OkCmd : MessageBase
     {
     }
 
-    public class ErrorCmd : IdBase
+    public class ErrorCmd : MessageBase
     {
         public uint Id { get; set; }
         public string ErrorMessage { get; set; }
@@ -67,21 +109,21 @@ namespace Buttplug
         }
     }
 
-    public class PingCmd : IdBase
+    public class PingCmd : MessageBase
     {
     }
 
     #endregion
 
     #region Handshake Messages
-    public class RequestServerInfoCmd : IdBase
+    public class ServerInfoCmd : MessageBase
     {
         public string ServerName { get; set; }
         public uint MessageVersion { get; set; }
         public uint MaxPingTime { get; set; }
     }
 
-    public class ServerInfoCmd : IdBase
+    public class RequestServerInfoCmd : MessageBase
     {
         public string ClientName { get; set; }
         public uint MessageVersion { get; set; }
@@ -90,41 +132,53 @@ namespace Buttplug
 
     #region Enumeration Messages
 
-    public class StartScanningCmd : IdBase
+    public class StartScanningCmd : MessageBase
     {
     }
 
-    public class StopScanningCmd : IdBase
+    public class StopScanningCmd : MessageBase
     {
     }
-    public class ScanningFinishedCmd : IdBase
-    {
-    }
-
-    public class RequestDeviceListCmd : IdBase
+    public class ScanningFinishedCmd : MessageBase
     {
     }
 
-    public class DeviceListCmd : IdBase
+    public class RequestDeviceListCmd : MessageBase
+    {
+    }
+
+    public class DeviceListCmd : MessageBase
+    {
+        public List<DeviceAddedCmd> Devices { get; set; }
+    }
+
+    public class DeviceAddedCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
         public string DeviceName { get; set; }
-        public DeviceMessages DeviceMessages { get; set; }
-    }
+        public Dictionary<string, DeviceMessages> DeviceMessagesDetails { get; set; }
 
-    public class DeviceAddedCmd : DeviceListCmd
-    {
+        
     }
 
     public class DeviceMessages
     {
-        //TODO
-        public Dictionary<string, int> VibrateCmd { get; set; }
-        public Dictionary<string, int> StopDeviceCmd { get; set; }
-        public Dictionary<string, int> BatteryLevelCmd { get; set; }
+        public const string VibrateCmd = "VibrateCmd";
+        public const string BatteryLevelCmd = "BatteryLevelCmd";
+        public const string StopDeviceCmd = "StopDeviceCmd";
+        public const string LinearCmd = "LinearCmd";
+        public const string RotateCmd = "RotateCmd";
     }
 
-    public class DeviceRemovedCmd : IdBase
+    public class DeviceMessagesDetails
+    {
+        public uint FeatureCount { get; set; }
+        public List<uint> StepCount { get; set; }
+        public List<string> Endpoints { get; set; }
+        public List<uint> MaxDuration { get; set; }
+    }
+
+    public class DeviceRemovedCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
     }
@@ -139,15 +193,15 @@ namespace Buttplug
 
     #region Generic Device Messages
 
-    public class StopDeviceCmd : IdBase
+    public class StopDeviceCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
     }
 
-    public class StopAllDevicesCmd : IdBase
+    public class StopAllDevicesCmd : MessageBase
     {
     }
-    public class VibrateCmd : IdBase
+    public class VibrateCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
 
@@ -160,7 +214,7 @@ namespace Buttplug
         public double Speed { get; set; }
     }
 
-    public class LinearCmd : IdBase
+    public class LinearCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
 
@@ -174,7 +228,7 @@ namespace Buttplug
         public double Position { get; set; }
     }
 
-    public class RotateCmd : IdBase
+    public class RotateCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
 
@@ -184,30 +238,30 @@ namespace Buttplug
     public class Rotations
     {
         public uint Index { get; set; }
-        public uint Speed { get; set; }
+        public double Speed { get; set; }
         public bool Clockwise { get; set; }
     }
     #endregion
 
     #region Generic Sensor Messages
 
-    public class BatteryLevelCmd : IdBase
+    public class BatteryLevelCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
     }
 
-    public class BatteryLevelReadingCmd : IdBase
+    public class BatteryLevelReadingCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
         public double BatteryLevel { get; set; }
     }
 
-    public class RSSILevelCmd : IdBase
+    public class RSSILevelCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
     }
 
-    public class RSSILevelReadingCmd : IdBase
+    public class RSSILevelReadingCmd : MessageBase
     {
         public uint DeviceIndex { get; set; }
         public int RSSILevel { get; set; }

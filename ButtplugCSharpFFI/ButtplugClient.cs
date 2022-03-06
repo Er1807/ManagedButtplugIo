@@ -12,18 +12,15 @@ namespace Buttplug
         private static readonly Dictionary<uint, WeakReference> _clientStorage = new Dictionary<uint, WeakReference>();
         private static uint _clientCounter = 1;
 
-        private readonly ButtplugFFIMessageSorter _messageSorter;
-        private readonly ButtplugFFIClientHandle _clientHandle;
+        internal ButtplugMessageManager _messageManager;
 
         /// <summary>
         /// Stores information about devices currently connected to the server.
         /// </summary>
         private readonly ConcurrentDictionary<uint, ButtplugClientDevice> _devices;
-        private readonly ButtplugCallback _sorterCallbackDelegate;
 
         // To detect redundant calls
         private bool _disposed;
-        private GCHandle _indexHandle;
 
         public ButtplugClientDevice[] Devices => _devices.Values.ToArray();
 
@@ -38,10 +35,20 @@ namespace Buttplug
         /// </summary>
         public event EventHandler<DeviceAddedEventArgs> DeviceAdded;
 
+        public void OnDeviceAdded(object sender, DeviceAddedEventArgs args)
+        {
+            DeviceAdded?.Invoke(sender, args);
+        }
+
         /// <summary>
         /// Event fired on Buttplug device removed. Can fire at any time after device connection.
         /// </summary>
         public event EventHandler<DeviceRemovedEventArgs> DeviceRemoved;
+
+        public void OnDeviceRemoved(object sender, DeviceRemovedEventArgs args)
+        {
+            DeviceRemoved?.Invoke(sender, args);
+        }
 
         /// <summary>
         /// Fires when an error that was not provoked by a client action is received from the server,
@@ -50,113 +57,86 @@ namespace Buttplug
         /// </summary>
         public event EventHandler<ButtplugExceptionEventArgs> ErrorReceived;
 
+        public void OnErrorReceived(object sender, ButtplugExceptionEventArgs args)
+        {
+            ErrorReceived?.Invoke(sender, args);
+        }
+
         /// <summary>
         /// Event fired when the server has finished scanning for devices.
         /// </summary>
         public event EventHandler ScanningFinished;
-
+        public void OnScanningFinished(object sender, EventArgs args)
+        {
+            IsScanning = false;
+            ScanningFinished?.Invoke(sender, args);
+        }
         /// <summary>
         /// Event fired when a server ping timeout has occured.
         /// </summary>
         public event EventHandler PingTimeout;
-
+        public void OnPingTimeout(object sender, EventArgs args)
+        {
+            PingTimeout?.Invoke(sender, args);
+        }
         /// <summary>
         /// Event fired when a server disconnect has occured.
         /// </summary>
         public event EventHandler ServerDisconnect;
 
+        public void OnServerDisconnect(object sender, EventArgs args)
+        {
+            Connected = false;
+            _devices.Clear();
+            ServerDisconnect?.Invoke(sender, args);
+        }
+
         public bool IsScanning { get; private set; }
 
         private object _disposeLock;
 
-        public ButtplugClient(string aClientName): this(aClientName, StaticSorterCallback)
-        {
-        }
+        
 
-        protected ButtplugClient(string aClientName, ButtplugCallback aCallback)
+        protected ButtplugClient(string aClientName)
         {
             Name = aClientName;
-            _sorterCallbackDelegate = aCallback;
             _disposeLock = new object();
 
-            _messageSorter = new ButtplugFFIMessageSorter();
             _devices = new ConcurrentDictionary<uint, ButtplugClientDevice>();
 
-            var context = new WeakReference(this);
             var clientIndex = _clientCounter;
             _clientCounter += 1;
 
-            // Since we can pass the handle, I don't *think* this needs to be pinned?
-            _indexHandle = GCHandle.Alloc(clientIndex);
-            _clientStorage.Add(clientIndex, context);
-            _clientHandle = ButtplugFFI.SendCreateClient(aClientName, _sorterCallbackDelegate, GCHandle.ToIntPtr(_indexHandle));
         }
 
         ~ButtplugClient() => Dispose(false);
 
         public async Task ConnectAsync(ButtplugEmbeddedConnectorOptions aConnector)
         {
-            if (aConnector == null)
-            {
-                aConnector = new ButtplugEmbeddedConnectorOptions();
-            }
-
-            await ButtplugFFI.SendConnectLocal(
-                _messageSorter,
-                _clientHandle,
-                aConnector.ServerName,
-                aConnector.MaxPingTime,
-                aConnector.AllowRawMessages,
-                aConnector.DeviceConfigJSON,
-                aConnector.UserDeviceConfigJSON,
-                aConnector.DeviceCommunicationManagerTypes,
-                _sorterCallbackDelegate, GCHandle.ToIntPtr(_indexHandle))
-                .ConfigureAwait(false);
-
-            Connected = true;
+            throw new NotImplementedException("This feature doesnt exist in the managed Client");
         }
 
         public async Task ConnectAsync(ButtplugWebsocketConnectorOptions aConnector)
         {
-            await ButtplugFFI.SendConnectWebsocket(_messageSorter, _clientHandle, aConnector.NetworkAddress.ToString(), false, _sorterCallbackDelegate, GCHandle.ToIntPtr(_indexHandle))
-                             .ConfigureAwait(false);
+            _messageManager = new ButtplugMessageManager(aConnector, this);
+            _messageManager.Connect();
 
             Connected = true;
+
         }
 
         public async Task DisconnectAsync()
         {
-            await ButtplugFFI.SendDisconnect(_messageSorter, _clientHandle, _sorterCallbackDelegate, GCHandle.ToIntPtr(_indexHandle))
-                             .ConfigureAwait(false);
+            _messageManager.Disconnect();
+
 
             _devices.Clear();
             Connected = false;
         }
 
-        protected static void StaticSorterCallback(IntPtr ctx, IntPtr buf, int buf_length)
-        {
-            GCHandle indexHandle = GCHandle.FromIntPtr(ctx);
-            uint index = (uint)indexHandle.Target;
-
-            var client = _clientStorage[index];
-            if (client.IsAlive)
-            {
-                ((ButtplugClient)client.Target).SorterCallbackHandler(buf, buf_length);
-            }
-        }
-
         protected void SorterCallbackHandler(IntPtr buf, int buf_length)
         {
-            // Process the data BEFORE we throw to the C# executor, otherwise
-            // Rust will clean up the memory and we'll have nothing to read
-            // from, meaning a null message at best and a crash at worst.
-            Span<byte> byteArray;
-            unsafe
-            {
-                byteArray = new Span<byte>(buf.ToPointer(), buf_length);
-            }
-
-            var server_message = ButtplugFFIServerMessage.Parser.ParseFrom(byteArray.ToArray());
+                       var server_message = ButtplugFFIServerMessage.Parser.ParseFrom(byteArray.ToArray());
             // Run the response in the context of the C# executor, not the Rust
             // thread. This means that if something goes wrong we at least
             // aren't blocking a rust executor thread.
@@ -228,15 +208,7 @@ namespace Buttplug
 
                         ErrorReceived?.Invoke(this, new ButtplugExceptionEventArgs(error));
                     }
-                    else if (server_message.Message.ServerMessage.MsgCase == ServerMessage.MsgOneofCase.ScanningFinished)
-                    {
-                        IsScanning = false;
-                        ScanningFinished?.Invoke(this, null);
-                    }
-                    else
-                    {
-                        // We should probably do something here with unhandled events, but I'm not particularly sure what. I miss pattern matching. :(
-                    }
+                    
                 }
                 else
                 {
@@ -248,26 +220,22 @@ namespace Buttplug
         public async Task StartScanningAsync()
         {
             IsScanning = true;
-            await ButtplugFFI.SendStartScanning(_messageSorter, _clientHandle, _sorterCallbackDelegate, GCHandle.ToIntPtr(_indexHandle))
-                             .ConfigureAwait(false);
+            await _messageManager.SendClientMessage(new StartScanningCmd());
         }
 
         public async Task StopScanningAsync()
         {
             IsScanning = false;
-            await ButtplugFFI.SendStopScanning(_messageSorter, _clientHandle, _sorterCallbackDelegate, GCHandle.ToIntPtr(_indexHandle))
-                             .ConfigureAwait(false);
+            await _messageManager.SendClientMessage(new StopScanningCmd());
         }
 
         public async Task StopAllDevicesAsync()
         {
-            await ButtplugFFI.SendStopAllDevices(_messageSorter, _clientHandle, _sorterCallbackDelegate, GCHandle.ToIntPtr(_indexHandle))
-                             .ConfigureAwait(false);
+            await _messageManager.SendClientMessage(new StopAllDevicesCmd());
         }
         public async Task PingAsync()
         {
-            await ButtplugFFI.SendPing(_messageSorter, _clientHandle, _sorterCallbackDelegate, GCHandle.ToIntPtr(_indexHandle))
-                             .ConfigureAwait(false);
+            await _messageManager.SendClientMessage(new PingCmd());
         }
 
         public void Dispose()
@@ -289,10 +257,6 @@ namespace Buttplug
 
                 if (disposing)
                 {
-                    // Dispose managed state (managed objects).
-                    _clientStorage.Remove((uint)_indexHandle.Target);
-                    _indexHandle.Free();
-                    _clientHandle?.Dispose();
                 }
 
                 _disposed = true;

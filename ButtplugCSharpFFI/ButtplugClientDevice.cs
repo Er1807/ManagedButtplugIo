@@ -5,17 +5,8 @@ using System.Threading.Tasks;
 
 namespace Buttplug
 {
-    public class ButtplugClientDevice : IDisposable
+    public class ButtplugClientDevice
     {
-        private readonly ButtplugFFIMessageSorter _sorter;
-        private readonly ButtplugFFIDeviceHandle _handle;
-        private readonly ButtplugCallback _sorterCallback;
-        private readonly IntPtr _sorterCallbackCtx;
-
-        private object _disposeLock;
-
-        private bool _disposed;
-
         /// <summary>
         /// The device index, which uniquely identifies the device on the server.
         /// </summary>
@@ -33,7 +24,9 @@ namespace Buttplug
         /// <summary>
         /// The Buttplug Protocol messages supported by this device, with additional attributes.
         /// </summary>
-        public Dictionary<ServerMessage.Types.MessageAttributeType, ButtplugMessageAttributes> AllowedMessages { get; }
+        public Dictionary<string, DeviceMessagesDetails> AllowedMessages { get; }
+
+        private readonly ButtplugMessageManager _manager;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ButtplugClientDevice"/> class, using
@@ -42,53 +35,17 @@ namespace Buttplug
         /// <param name="aIndex">The device index.</param>
         /// <param name="aName">The device name.</param>
         /// <param name="aAllowedMessages">The device allowed message list, with corresponding attributes.</param>
-        internal ButtplugClientDevice(ButtplugFFIMessageSorter aSorter,
-            ButtplugFFIDeviceHandle aHandle,
+        internal ButtplugClientDevice(ButtplugMessageManager manager,
             uint aIndex,
             string aName,
-            Dictionary<ServerMessage.Types.MessageAttributeType, ButtplugMessageAttributes> aAllowedMessages,
-            ButtplugCallback aCallback,
-            IntPtr aCallbackCtx)
+            Dictionary<string, DeviceMessagesDetails> aAllowedMessages)
         {
-            _disposeLock = new object();
-            _disposed = false;
-            _sorter = aSorter;
-            _handle = aHandle;
+            _manager = manager;
             Index = aIndex;
             Name = aName;
             AllowedMessages = aAllowedMessages;
-            _sorterCallback = aCallback;
-            _sorterCallbackCtx = aCallbackCtx;
         }
 
-        ~ButtplugClientDevice() => Dispose(false);
-
-        public void Dispose()
-        {
-            Dispose(true);
-            // Suppress finalization.
-            GC.SuppressFinalize(this);
-        }
-
-        // Protected implementation of Dispose pattern.
-        protected virtual void Dispose(bool disposing)
-        {
-            lock (_disposeLock) 
-            {
-                if (_disposed)
-                {
-                    return;
-                }
-
-                if (disposing)
-                {
-                    // Dispose managed state (managed objects).
-                    _handle?.Dispose();
-                }
-
-                _disposed = true;
-            }
-        }
 
         public bool Equals(ButtplugClientDevice aDevice)
         {
@@ -99,9 +56,9 @@ namespace Buttplug
         {
             // If the message is missing from our dict, we should still send anyways just to let the rust library throw.
             var count = 1u;
-            if (AllowedMessages.ContainsKey(ServerMessage.Types.MessageAttributeType.VibrateCmd))
+            if (AllowedMessages.ContainsKey(DeviceMessages.VibrateCmd))
             {
-                count = AllowedMessages[ServerMessage.Types.MessageAttributeType.VibrateCmd].FeatureCount;
+                count = AllowedMessages[DeviceMessages.VibrateCmd].FeatureCount;
             }
 
             // There is probably a cleaner, LINQyer way to do this but ugh don't care.
@@ -121,16 +78,23 @@ namespace Buttplug
 
         public Task SendVibrateCmd(Dictionary<uint, double> aCmds)
         {
-            return ButtplugFFI.SendVibrateCmd(_sorter, _handle, Index, aCmds, _sorterCallback, _sorterCallbackCtx);
+            VibrateCmd vibrateMessage = new VibrateCmd();
+            vibrateMessage.DeviceIndex = Index;
+            vibrateMessage.Speeds = new List<VibrateSpeed>();
+            foreach (var command in aCmds)
+            {
+                vibrateMessage.Speeds.Add(new VibrateSpeed() { Index = command.Key, Speed = command.Value });
+            }
+            return _manager.SendClientMessage(vibrateMessage);
         }
 
         public Task SendRotateCmd(double aSpeed, bool aClockwise)
         {
             // If the message is missing from our dict, we should still send anyways just to let the rust library throw.
             var count = 1u;
-            if (AllowedMessages.ContainsKey(ServerMessage.Types.MessageAttributeType.RotateCmd))
+            if (AllowedMessages.ContainsKey(DeviceMessages.RotateCmd))
             {
-                count = AllowedMessages[ServerMessage.Types.MessageAttributeType.RotateCmd].FeatureCount;
+                count = AllowedMessages[DeviceMessages.RotateCmd].FeatureCount;
             }
 
             // There is probably a cleaner, LINQyer way to do this but ugh don't care.
@@ -150,16 +114,23 @@ namespace Buttplug
 
         public Task SendRotateCmd(Dictionary<uint, (double, bool)> aCmds)
         {
-            return ButtplugFFI.SendRotateCmd(_sorter, _handle, Index, aCmds, _sorterCallback, _sorterCallbackCtx);
+            RotateCmd rotateMessage = new RotateCmd();
+            rotateMessage.DeviceIndex = Index;
+            rotateMessage.Rotations = new List<Rotations>();
+            foreach (var command in aCmds)
+            {
+                rotateMessage.Rotations.Add(new Rotations() { Index = command.Key, Speed = command.Value.Item1, Clockwise= command.Value.Item2 });
+            }
+            return _manager.SendClientMessage(rotateMessage);
         }
 
         public Task SendLinearCmd(uint aDuration, double aPosition)
         {
             // If the message is missing from our dict, we should still send anyways just to let the rust library throw.
             var count = 1u;
-            if (AllowedMessages.ContainsKey(ServerMessage.Types.MessageAttributeType.LinearCmd))
+            if (AllowedMessages.ContainsKey(DeviceMessages.LinearCmd))
             {
-                count = AllowedMessages[ServerMessage.Types.MessageAttributeType.LinearCmd].FeatureCount;
+                count = AllowedMessages[DeviceMessages.LinearCmd].FeatureCount;
             }
 
             // There is probably a cleaner, LINQyer way to do this but ugh don't care.
@@ -179,38 +150,35 @@ namespace Buttplug
 
         public Task SendLinearCmd(Dictionary<uint, (uint, double)> aCmds)
         {
-            return ButtplugFFI.SendLinearCmd(_sorter, _handle, Index, aCmds, _sorterCallback, _sorterCallbackCtx);
+            LinearCmd linearMessage = new LinearCmd();
+            linearMessage.DeviceIndex = Index;
+            linearMessage.Vectors = new List<LinearVector>();
+            foreach (var command in aCmds)
+            {
+                linearMessage.Vectors.Add(new LinearVector() { Index = command.Key, Duration = command.Value.Item1, Position = command.Value.Item2 });
+            }
+            return _manager.SendClientMessage(linearMessage);
         }
 
         public async Task<double> SendBatteryLevelCmd()
         {
-            var reading = await ButtplugFFI.SendBatteryLevelCmd(_sorter, _handle, Index, _sorterCallback, _sorterCallbackCtx)
-                                           .ConfigureAwait(false);
+            var result = await _manager.SendClientMessage(new BatteryLevelCmd() { DeviceIndex = Index });
+            if (result is BatteryLevelReadingCmd reading)
+                return reading.BatteryLevel;
 
-            if (reading.Message.MsgCase == ButtplugFFIServerMessage.Types.FFIMessage.MsgOneofCase.DeviceEvent
-             && reading.Message.DeviceEvent.MsgCase == DeviceEvent.MsgOneofCase.BatteryLevelReading)
-            {
-                return reading.Message.DeviceEvent.BatteryLevelReading.Reading;
-            }
-
-            throw new ButtplugDeviceException($"Expected message type of BatteryLevelReading not received, got {reading.Message.MsgCase} instead.");
+            throw new ButtplugDeviceException($"Expected message type of BatteryLevelReading not received, got {result} instead.");
         }
 
         public async Task<int> SendRSSIBatteryLevelCmd()
         {
-            var reading = await ButtplugFFI.SendRSSILevelCmd(_sorter, _handle, Index, _sorterCallback, _sorterCallbackCtx)
-                                           .ConfigureAwait(false);
+            var result = await _manager.SendClientMessage(new RSSILevelCmd() { DeviceIndex = Index });
+            if (result is RSSILevelReadingCmd reading)
+                return reading.RSSILevel;
 
-            if (reading.Message.MsgCase == ButtplugFFIServerMessage.Types.FFIMessage.MsgOneofCase.DeviceEvent
-             && reading.Message.DeviceEvent.MsgCase == DeviceEvent.MsgOneofCase.RssiLevelReading)
-            {
-                return reading.Message.DeviceEvent.RssiLevelReading.Reading;
-            }
-
-            throw new ButtplugDeviceException($"Expected message type of RssiLevelReading not received, got {reading.Message.MsgCase} instead.");
+            throw new ButtplugDeviceException($"Expected message type of RssiLevelReading not received, got {result} instead.");
         }
 
-        public async Task<byte[]> SendRawReadCmd(Endpoint aEndpoint, uint aExpectedLength, uint aTimeout)
+        public async Task<byte[]> SendRawReadCmd(string aEndpoint, uint aExpectedLength, uint aTimeout)
         {
             var reading = await ButtplugFFI.SendRawReadCmd(_sorter, _handle, Index, aEndpoint, aExpectedLength, aTimeout, _sorterCallback, _sorterCallbackCtx)
                                            .ConfigureAwait(false);
@@ -224,25 +192,24 @@ namespace Buttplug
             throw new ButtplugDeviceException($"Expected message type of RssiLevelReading not received, got {reading.Message.MsgCase} instead.");
         }
 
-        public Task SendRawWriteCmd(Endpoint aEndpoint, byte[] aData, bool aWriteWithResponse)
+        public Task SendRawWriteCmd(string aEndpoint, byte[] aData, bool aWriteWithResponse)
         {
             return ButtplugFFI.SendRawWriteCmd(_sorter, _handle, Index, aEndpoint, aData, aWriteWithResponse, _sorterCallback, _sorterCallbackCtx);
         }
 
-        public Task SendRawSubscribeCmd(Endpoint aEndpoint)
+        public Task SendRawSubscribeCmd(string aEndpoint)
         {
             return ButtplugFFI.SendRawSubscribeCmd(_sorter, _handle, Index, aEndpoint, _sorterCallback, _sorterCallbackCtx);
         }
 
-        public Task SendRawUnsubscribeCmd(Endpoint aEndpoint)
+        public Task SendRawUnsubscribeCmd(string aEndpoint)
         {
             return ButtplugFFI.SendRawUnsubscribeCmd(_sorter, _handle, Index, aEndpoint, _sorterCallback, _sorterCallbackCtx);
         }
 
         public Task SendStopDeviceCmd()
         {
-            // Every message should support this, but it doesn't hurt to check
-            return ButtplugFFI.SendStopDeviceCmd(_sorter, _handle, Index, _sorterCallback, _sorterCallbackCtx);
+            return _manager.SendClientMessage(new StopDeviceCmd() { DeviceIndex = Index });
         }
     }
 }
