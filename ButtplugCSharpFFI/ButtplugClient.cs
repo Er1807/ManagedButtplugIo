@@ -93,7 +93,7 @@ namespace Buttplug
 
         
 
-        protected ButtplugClient(string aClientName)
+        public ButtplugClient(string aClientName)
         {
             Name = aClientName;
             _devices = new ConcurrentDictionary<uint, ButtplugClientDevice>();
@@ -108,7 +108,7 @@ namespace Buttplug
         public async Task ConnectAsync(ButtplugWebsocketConnectorOptions aConnector)
         {
             _messageManager = new ButtplugMessageManager(aConnector, this);
-            _messageManager.Connect();
+            await _messageManager.Connect();
 
             Connected = true;
 

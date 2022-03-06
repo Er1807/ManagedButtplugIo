@@ -42,8 +42,8 @@ namespace Buttplug
             _webSocket = new WebSocket(connectorOptions.NetworkAddress.AbsoluteUri);
             _client = client;
             _webSocket.OnMessage += RecieveMessage;
-            _webSocket.OnClose += (a, b) => _client.OnServerDisconnect(this, b);
-            _webSocket.OnError += (a, b) => _client.OnServerDisconnect(this, b);
+            _webSocket.OnClose += (sender, args) =>_client.OnServerDisconnect(sender, args);
+            _webSocket.OnError += (sender, args) =>_client.OnServerDisconnect(sender, args);
         }
 
         public async Task Connect()
@@ -53,19 +53,36 @@ namespace Buttplug
 
             if (result is ServerInfo serverInfo)
             {
+                Console.WriteLine(serverInfo.MaxPingTime);
                 _pingTimeout = serverInfo.MaxPingTime;
                 new Thread(Pings).Start();
-                //Start pings
+
+
+                var result2 = await SendClientMessage(new RequestDeviceList() { });
+
+                if (result2 is DeviceList list)
+                {
+                    foreach (var device in list.Devices)
+                    {
+                        AddDevice(device);
+                    }
+                }
+
             }
 
         }
 
         private void Pings()
         {
+            bool wspings = _pingTimeout == 0;
+            if (wspings) _pingTimeout = 1000 * 10 * 2;
             while (_webSocket.ReadyState == WebSocketState.Open)
             {
+                if (wspings)
+                    _webSocket.Ping();
+                else
+                    SendClientMessage(new Ping());
                 Thread.Sleep((int)_pingTimeout / 2);
-                SendClientMessage(new Ping());
             }
         }
 
@@ -111,8 +128,11 @@ namespace Buttplug
 
             var promise = new TaskCompletionSource<MessageBase>();
             _waitingMsgs.TryAdd(id, promise);
-
-            _webSocket.Send(JsonConvert.SerializeObject(Message.From(aMsg)));
+            string jsonString = JsonConvert.SerializeObject(new List<Message>() { Message.From(aMsg) }, Formatting.Indented, new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore
+            });
+            _webSocket.Send(jsonString);
 
             return promise.Task;
         }
@@ -120,7 +140,6 @@ namespace Buttplug
         public void CheckMessage(MessageBase aMsg)
         {
             // We'll never match a system message, those are server -> client only.
-
             if (aMsg is Error error)
             {
                 if (error.ErrorCode == Error.ErrorCodeEnum.ERROR_PING)
@@ -134,10 +153,7 @@ namespace Buttplug
             {
                 if (aMsg is DeviceAdded deviceAdded)
                 {
-                    if (_client.Devices.Any(x => x.Index == deviceAdded.DeviceIndex))
-                        _client.OnErrorReceived(this, new ButtplugExceptionEventArgs(new ButtplugDeviceException("A duplicate device index was received. This is most likely a bug, please file at https://github.com/buttplugio/buttplug-rs-ffi")));
-                    else
-                        _client.OnDeviceAdded(_client, new DeviceAddedEventArgs(new ButtplugClientDevice(this, deviceAdded.DeviceIndex, deviceAdded.DeviceName, deviceAdded.DeviceMessages)));
+                    AddDevice(deviceAdded);
 
                 }
                 if (aMsg is DeviceRemoved deviceRemoved)
@@ -168,6 +184,14 @@ namespace Buttplug
             {
                 queued.SetResult(aMsg);
             }
+        }
+
+        private void AddDevice(DeviceAdded deviceAdded)
+        {
+            if (_client.Devices.Any(x => x.Index == deviceAdded.DeviceIndex))
+                _client.OnErrorReceived(this, new ButtplugExceptionEventArgs(new ButtplugDeviceException("A duplicate device index was received. This is most likely a bug, please file at https://github.com/buttplugio/buttplug-rs-ffi")));
+            else
+                _client.OnDeviceAdded(_client, new DeviceAddedEventArgs(new ButtplugClientDevice(this, deviceAdded.DeviceIndex, deviceAdded.DeviceName, deviceAdded.DeviceMessages)));
         }
     }
 }
