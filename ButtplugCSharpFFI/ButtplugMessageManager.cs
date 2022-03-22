@@ -167,6 +167,8 @@ namespace Buttplug
 
                 if (aMsg is ScanningFinished)
                     _client.OnScanningFinished(_client, new EventArgs()); ;
+
+                return;
             }
 
             // If we haven't gotten a system message and we're not currently waiting for the message
