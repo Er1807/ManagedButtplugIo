@@ -4,7 +4,7 @@
 // Licensed under the BSD 3-Clause license. See LICENSE file in the project root for full license information.
 // </copyright>
 
-namespace Buttplug
+namespace ButtplugManaged
 {
     /// <summary>
     /// Event wrapper for Buttplug DeviceAdded or DeviceRemoved messages. Used when the server

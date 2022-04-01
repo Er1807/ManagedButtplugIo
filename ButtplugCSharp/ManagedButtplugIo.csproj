@@ -3,7 +3,7 @@
   <PropertyGroup>
     <PackageId />
     <Title>Buttplug</Title>
-    <AssemblyName>Buttplug</AssemblyName>
+    <AssemblyName>ButtplugManaged</AssemblyName>
     <Summary>Buttplug Sex Toy Control Library</Summary>
     <Version>2.0.6</Version>
     <Authors>Nonpolynomial, LLC</Authors>

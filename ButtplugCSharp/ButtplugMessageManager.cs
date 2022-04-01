@@ -14,7 +14,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using WebSocketSharp;
 
-namespace Buttplug
+namespace ButtplugManaged
 {
     public class ButtplugMessageManager
     {

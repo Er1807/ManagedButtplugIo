@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 
-namespace Buttplug
+namespace ButtplugManaged
 {
     public class ButtplugClient
     {

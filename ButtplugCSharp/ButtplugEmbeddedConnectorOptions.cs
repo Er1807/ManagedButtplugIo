@@ -1,4 +1,4 @@
-﻿namespace Buttplug
+﻿namespace ButtplugManaged
 {
     public class ButtplugEmbeddedConnectorOptions
     {
